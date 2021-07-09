@@ -29,7 +29,10 @@ import com.facebook.react.bridge.Callback;
 import com.facebook.react.ReactApplication;
 import com.facebook.react.ReactInstanceManager;
 
-import com.google.firebase.iid.FirebaseInstanceId;
+import com.google.firebase.messaging.FirebaseMessaging;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
+import androidx.annotation.NonNull;
 
 import com.amazonaws.amplify.pushnotification.modules.RNPushNotificationJsDelivery;
 import com.amazonaws.amplify.pushnotification.modules.RNPushNotificationBroadcastReceiver;
@@ -64,9 +67,24 @@ public class RNPushNotificationModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void getToken(Callback callback) {
-        String token =  FirebaseInstanceId.getInstance().getToken();
-        Log.i(LOG_TAG, "getting token" + token);
-        callback.invoke(token);
+    public void getToken(final Callback callback) {
+        // String token =  FirebaseMessaging.getInstance().getToken();
+        FirebaseMessaging.getInstance().getToken()
+            .addOnCompleteListener(new OnCompleteListener<String>() {
+                @Override
+                public void onComplete(@NonNull Task<String> task) {
+                    if (!task.isSuccessful()) {
+                        Log.w(LOG_TAG, "Fetching FCM registration token failed", task.getException());
+                        return;
+                    }
+
+                    // Get new FCM registration token
+                    String token = task.getResult();
+
+                    // Log and toast
+                    Log.i(LOG_TAG, "getting token" + token);
+                    callback.invoke(token);
+                }
+            });
     }
 }

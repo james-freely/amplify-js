@@ -91,6 +91,52 @@ public class RNPushNotificationMessagingService extends FirebaseMessagingService
         });
     }
 
+    @Override
+    public void onNewToken(String token) {
+        // Get updated InstanceID token.
+        String refreshedToken = token;
+        Log.v(LOG_TAG, "Refreshed token: " + refreshedToken);
+
+        final Bundle bundle = convertTokenToBundle(refreshedToken);
+        // We need to run this on the main thread, as the React code assumes that is true.
+        // Namely, DevServerHelper constructs a Handler() without a Looper, which triggers:
+        // "Can't create handler inside thread that has not called Looper.prepare()"
+        Handler handler = new Handler(Looper.getMainLooper());
+        handler.post(new Runnable() {
+            public void run() {
+                // Construct and load our normal React JS code bundle
+                ReactInstanceManager mReactInstanceManager = ((ReactApplication) getApplication()).getReactNativeHost().getReactInstanceManager();
+                ReactContext context = mReactInstanceManager.getCurrentReactContext();
+                // If it's constructed, send a notification
+                if (context != null) {
+                    sendRegistrationToken((ReactApplicationContext) context, bundle);
+                } else {
+                    // Otherwise wait for construction, then send the notification
+                    mReactInstanceManager.addReactInstanceEventListener(new ReactInstanceManager.ReactInstanceEventListener() {
+                        public void onReactContextInitialized(ReactContext context) {
+                            sendRegistrationToken((ReactApplicationContext) context, bundle);
+                        }
+                    });
+                    if (!mReactInstanceManager.hasStartedCreatingInitialContext()) {
+                        // Construct it in the background
+                        mReactInstanceManager.createReactContextInBackground();
+                    }
+                }
+            }
+        });
+    }
+
+    private void sendRegistrationToken(ReactApplicationContext context, Bundle bundle) {
+        RNPushNotificationJsDelivery jsDelivery = new RNPushNotificationJsDelivery(context);
+        jsDelivery.emitTokenReceived(bundle);
+    }
+
+    private Bundle convertTokenToBundle(String token) {
+        Bundle bundle = new Bundle();
+        bundle.putString("refreshToken", token);
+        return bundle;
+    }
+
     private void handleFCMMessagePush(ReactApplicationContext context, Bundle bundle, Boolean isForeground, Boolean hasData) {
         // send the message to device emitter
         RNPushNotificationJsDelivery jsDelivery = new RNPushNotificationJsDelivery((ReactApplicationContext) context);
